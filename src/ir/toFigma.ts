@@ -105,7 +105,7 @@ export async function nodeToFigma(node: IRNode, snap: LibrarySnapshot, parent: F
       const entry = snap.components[node.componentKey];
       if (!entry) throw new Error(`Component not in synced list: ${node.componentKey}`);
       const source = await figma.getNodeByIdAsync(entry.nodeId);
-      if (!source) throw new Error(`Component node ${entry.nodeId} not found. Run inside the Leaf copy file.`);
+      if (!source) throw new Error(`Component node ${entry.nodeId} not found. Re-sync the library.`);
       // A component set instantiates its default variant unless variants are given.
       const component =
         source.type === "COMPONENT_SET" ? source.defaultVariant : (source as ComponentNode);

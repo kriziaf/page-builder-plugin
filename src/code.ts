@@ -6,8 +6,8 @@ import { pageIRToFigma } from "./ir/toFigma";
 import { pageToHtml } from "./ir/toHtml";
 import type { LibrarySnapshot, PageIR } from "./ir/types";
 
-// Runs inside "Leaf Public Sites Lib-test (Copy)" (file key kMEfNfi0711kmQrGbcPZkm).
-// Components are local to that file and referenced by node ID; see src/library/refs.ts.
+// Runs inside the open library file. "Leaf Public Sites Lib-test (Copy)" (file key kMEfNfi0711kmQrGbcPZkm)
+// is the reference: its node IDs are tried first, then components are found by name; see src/library/refs.ts.
 
 figma.showUI(__html__, { width: 420, height: 600 });
 
@@ -23,7 +23,14 @@ figma.ui.onmessage = async (msg: { type: string; [k: string]: any }) => {
   try {
     if (msg.type === "sync") {
       snapshot = await syncLibrary(COMPONENT_REFS);
-      figma.ui.postMessage({ type: "synced", tokens: Object.keys(snapshot.tokens).length });
+      const byName = Object.keys(snapshot.resolution).filter((k) => snapshot!.resolution[k] === "name");
+      figma.ui.postMessage({
+        type: "synced",
+        source: snapshot.source,
+        tokens: Object.keys(snapshot.tokens).length,
+        components: Object.keys(snapshot.components).length,
+        byName,
+      });
     }
 
     if (msg.type === "generate") {

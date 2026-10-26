@@ -34,7 +34,8 @@
   onmessage = (e) => {
     const m = e.data.pluginMessage;
     if (!m) return;
-    if (m.type === "synced") { status.textContent = `Synced ${m.tokens} color tokens.`; generate.disabled = false; }
+    if (m.type === "synced") { status.textContent = `Library "${m.source}": ${m.components} components, ${m.tokens} tokens.` +
+      (m.byName.length ? ` Found by name (not reference IDs): ${m.byName.join(", ")}.` : ""); generate.disabled = false; }
     if (m.type === "generated") { preview.srcdoc = m.html; status.textContent = "Generated."; }
     if (m.type === "error") status.textContent = m.message;
   };

@@ -9,6 +9,29 @@
     while (p && p.type !== "PAGE") p = p.parent;
     return p;
   };
+  var isComponent = (n) => !!n && (n.type === "COMPONENT_SET" || n.type === "COMPONENT");
+  var normalize = (name) => name.trim().toLowerCase();
+  async function findComponentByName(name) {
+    var _a;
+    const wanted = normalize(name);
+    let component = null;
+    for (const page of figma.root.children) {
+      await page.loadAsync();
+      const matches = page.findAllWithCriteria({ types: ["COMPONENT_SET", "COMPONENT"] });
+      for (const m of matches) {
+        if (normalize(m.name) !== wanted) continue;
+        if (m.type === "COMPONENT_SET") return m;
+        if (((_a = m.parent) == null ? void 0 : _a.type) !== "COMPONENT_SET" && !component) component = m;
+      }
+    }
+    return component;
+  }
+  async function resolveRef(ref) {
+    const byId = await figma.getNodeByIdAsync(ref.nodeId);
+    if (isComponent(byId)) return { node: byId, via: "id" };
+    const byName = await findComponentByName(ref.name);
+    return byName ? { node: byName, via: "name" } : null;
+  }
   async function harvest(node, seen, tokens, variableIds) {
     const bound = node.boundVariables;
     if (!bound) return;
@@ -37,13 +60,18 @@
     const tokens = {};
     const variableIds = {};
     const components = {};
+    const resolution = {};
+    const missing = [];
     const seen = /* @__PURE__ */ new Set();
-    for (const [name, { nodeId }] of Object.entries(refs)) {
-      const node = await figma.getNodeByIdAsync(nodeId);
-      if (!node || node.type !== "COMPONENT_SET" && node.type !== "COMPONENT") {
-        throw new Error(`"${name}" (${nodeId}) not found. Run this plugin inside the Leaf copy file.`);
+    for (const [key, ref] of Object.entries(refs)) {
+      const found = await resolveRef(ref);
+      if (!found) {
+        missing.push(`${key} ("${ref.name}")`);
+        continue;
       }
-      components[name] = { nodeId, isSet: node.type === "COMPONENT_SET" };
+      const { node, via } = found;
+      components[key] = { nodeId: node.id, isSet: node.type === "COMPONENT_SET" };
+      resolution[key] = via;
       const page = pageOf(node);
       if (page) await page.loadAsync();
       await harvest(node, seen, tokens, variableIds);
@@ -51,25 +79,30 @@
         await harvest(child, seen, tokens, variableIds);
       }
     }
-    return { source: "Leaf Public Sites Lib-test (Copy)", components, tokens, variableIds };
+    if (missing.length) {
+      throw new Error(
+        `Components not found in "${figma.root.name}": ${missing.join(", ")}. Open the Leaf test file or a library file with the same components.`
+      );
+    }
+    return { source: figma.root.name, components, tokens, variableIds, resolution };
   }
 
   // src/library/refs.ts
   var COMPONENT_REFS = {
-    "overview-cards": { nodeId: "5048:69686" },
-    // set "Overview Card", 10 variants
-    "promo-banner": { nodeId: "5053:3390" },
-    // set "Promo-Banner", 24 variants
-    "text-media": { nodeId: "2462:35747" },
-    // set, 4 variants
-    "two-col-form": { nodeId: "2611:83308" },
-    // set, 2 variants
-    "accent-card": { nodeId: "2501:32472" },
-    // set, 4 variants
-    "secondary-hero": { nodeId: "5710:6195" },
-    // set "Secondary Hero - Full Width", default 1440x420
-    "expanded-text": { nodeId: "2462:35759" }
-    // set "expanded text", default 4up, 1440 wide
+    "overview-cards": { nodeId: "5048:69686", name: "Overview Card" },
+    // set, 10 variants
+    "promo-banner": { nodeId: "5053:3390", name: "Promo-Banner" },
+    // set, 24 variants
+    "text-media": { nodeId: "2462:35747", name: "Text and Media" },
+    // set, 4 variants (name unverified)
+    "two-col-form": { nodeId: "2611:83308", name: "Form" },
+    // set, 2 variants (name unverified)
+    "accent-card": { nodeId: "2501:32472", name: "Accent Cards" },
+    // set, 4 variants (name unverified)
+    "secondary-hero": { nodeId: "5710:6195", name: "Secondary Hero - Full Width" },
+    // set, default 1440x420
+    "expanded-text": { nodeId: "2462:35759", name: "expanded text" }
+    // set, default 4up, 1440 wide
   };
 
   // src/templates/templateA.ts
@@ -253,7 +286,7 @@
         const entry = snap.components[node.componentKey];
         if (!entry) throw new Error(`Component not in synced list: ${node.componentKey}`);
         const source = await figma.getNodeByIdAsync(entry.nodeId);
-        if (!source) throw new Error(`Component node ${entry.nodeId} not found. Run inside the Leaf copy file.`);
+        if (!source) throw new Error(`Component node ${entry.nodeId} not found. Re-sync the library.`);
         const component = source.type === "COMPONENT_SET" ? source.defaultVariant : source;
         const inst = component.createInstance();
         inst.name = node.name;
@@ -340,7 +373,14 @@
     try {
       if (msg.type === "sync") {
         snapshot = await syncLibrary(COMPONENT_REFS);
-        figma.ui.postMessage({ type: "synced", tokens: Object.keys(snapshot.tokens).length });
+        const byName = Object.keys(snapshot.resolution).filter((k) => snapshot.resolution[k] === "name");
+        figma.ui.postMessage({
+          type: "synced",
+          source: snapshot.source,
+          tokens: Object.keys(snapshot.tokens).length,
+          components: Object.keys(snapshot.components).length,
+          byName
+        });
       }
       if (msg.type === "generate") {
         if (!snapshot) throw new Error("Sync the library first.");

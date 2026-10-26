@@ -52,8 +52,9 @@ export type TokenMap = Record<string, string>; // token name -> resolved value (
 
 export type LibrarySnapshot = {
   source: string;
-  // Local components in the Leaf copy file, referenced by node ID (valid only inside that file).
+  // Components of the open library file, as resolved at sync time (node IDs valid only in that file).
   components: Record<string, { nodeId: string; isSet: boolean }>;
   tokens: TokenMap; // token name ("base.spacing.24") -> resolved value (hex or number as string)
   variableIds: Record<string, string>; // token name -> Figma variable id
+  resolution: Record<string, "id" | "name">; // how each component was found: reference node ID or by name
 };
