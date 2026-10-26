@@ -1,4 +1,5 @@
 import type { LibrarySnapshot, TokenMap } from "../ir/types";
+import type { LibraryProfile } from "./profile";
 
 // Runs in the plugin sandbox, inside whichever library file is open. The Leaf Public Sites
 // copy is the reference file: its node IDs are tried first. In any other file with the same
@@ -11,7 +12,7 @@ import type { LibrarySnapshot, TokenMap } from "../ir/types";
 // referenced components, and components are referenced by local node ID.
 
 export type ComponentRef = { nodeId: string; name: string };
-export type Resolution = "id" | "name";
+export type Resolution = "id" | "name" | "key";
 export type ComponentRefs = Record<string, ComponentRef>;
 
 const toHex = (n: number) => Math.round(n * 255).toString(16).padStart(2, "0");
@@ -85,6 +86,16 @@ async function harvest(
   }
 }
 
+async function harvestTree(node: ComponentNode | ComponentSetNode, seen: Set<string>, tokens: TokenMap, variableIds: Record<string, string>) {
+  const page = pageOf(node);
+  if (page) await page.loadAsync(); // dynamic-page access: load before traversing
+  await harvest(node, seen, tokens, variableIds);
+  for (const child of node.findAll(() => true)) {
+    await harvest(child, seen, tokens, variableIds);
+  }
+}
+
+// Source-file path: resolves refs in the open file (by ID, then name). Used by capture mode.
 export async function syncLibrary(refs: ComponentRefs): Promise<LibrarySnapshot> {
   const tokens: TokenMap = {};
   const variableIds: Record<string, string> = {};
@@ -102,13 +113,7 @@ export async function syncLibrary(refs: ComponentRefs): Promise<LibrarySnapshot>
     const { node, via } = found;
     components[key] = { nodeId: node.id, isSet: node.type === "COMPONENT_SET" };
     resolution[key] = via;
-
-    const page = pageOf(node);
-    if (page) await page.loadAsync(); // dynamic-page access: load before traversing
-    await harvest(node, seen, tokens, variableIds);
-    for (const child of node.findAll(() => true)) {
-      await harvest(child, seen, tokens, variableIds);
-    }
+    await harvestTree(node, seen, tokens, variableIds);
   }
 
   if (missing.length) {
@@ -119,4 +124,67 @@ export async function syncLibrary(refs: ComponentRefs): Promise<LibrarySnapshot>
   }
 
   return { source: figma.root.name, components, tokens, variableIds, resolution };
+}
+
+// Target-file path: imports the profile's components by key from the library enabled in this file.
+export async function syncProfile(profile: LibraryProfile): Promise<LibrarySnapshot> {
+  const tokens: TokenMap = {};
+  const variableIds: Record<string, string> = {};
+  const components: LibrarySnapshot["components"] = {};
+  const resolution: Record<string, Resolution> = {};
+  const seen = new Set<string>();
+
+  const keyless = Object.entries(profile.components).filter(([, c]) => !c.key).map(([k]) => k);
+  if (keyless.length) {
+    throw new Error(
+      `Library "${profile.name}" has no component keys for: ${keyless.join(", ")}. ` +
+        "Run capture inside the library file and paste the output into its profile.",
+    );
+  }
+
+  const failed: string[] = [];
+  for (const [ref, c] of Object.entries(profile.components)) {
+    try {
+      const node = c.isSet
+        ? await figma.importComponentSetByKeyAsync(c.key)
+        : await figma.importComponentByKeyAsync(c.key);
+      components[ref] = { nodeId: node.id, isSet: c.isSet };
+      resolution[ref] = "key";
+      await harvestTree(node, seen, tokens, variableIds);
+    } catch {
+      failed.push(`${ref} ("${c.name}")`);
+    }
+  }
+
+  if (failed.length) {
+    throw new Error(
+      `Could not import from "${profile.name}": ${failed.join(", ")}. ` +
+        "Enable the library in this file (Assets > Libraries) and sync again.",
+    );
+  }
+
+  return { source: profile.name, components, tokens, variableIds, resolution };
+}
+
+// Capture mode, run inside a library file: the data a LibraryProfile needs.
+export async function captureProfile(refs: ComponentRefs): Promise<LibraryProfile["components"]> {
+  const out: LibraryProfile["components"] = {};
+  for (const [ref, r] of Object.entries(refs)) {
+    const found = await resolveRef(r);
+    if (!found) throw new Error(`"${ref}" ("${r.name}") not found in "${figma.root.name}".`);
+    out[ref] = { key: found.node.key, isSet: found.node.type === "COMPONENT_SET", name: found.node.name };
+  }
+  return out;
+}
+
+// True when the open file holds every profile component as a local node, i.e. it is a library
+// (source) file. Generating here would write into the library, so the plugin refuses.
+export async function isLibraryFile(profile: LibraryProfile, refs: ComponentRefs): Promise<boolean> {
+  if (figma.root.name === profile.sourceFile) return true;
+  const names = Object.keys(profile.components).map((k) => refs[k]?.name ?? profile.components[k].name);
+  if (!names.length) return false;
+  for (const name of names) {
+    if (!(await findComponentByName(name))) return false;
+  }
+  return true;
 }

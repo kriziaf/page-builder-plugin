@@ -56,35 +56,64 @@
       }
     }
   }
-  async function syncLibrary(refs) {
+  async function harvestTree(node, seen, tokens, variableIds) {
+    const page = pageOf(node);
+    if (page) await page.loadAsync();
+    await harvest(node, seen, tokens, variableIds);
+    for (const child of node.findAll(() => true)) {
+      await harvest(child, seen, tokens, variableIds);
+    }
+  }
+  async function syncProfile(profile) {
     const tokens = {};
     const variableIds = {};
     const components = {};
     const resolution = {};
-    const missing = [];
     const seen = /* @__PURE__ */ new Set();
-    for (const [key, ref] of Object.entries(refs)) {
-      const found = await resolveRef(ref);
-      if (!found) {
-        missing.push(`${key} ("${ref.name}")`);
-        continue;
-      }
-      const { node, via } = found;
-      components[key] = { nodeId: node.id, isSet: node.type === "COMPONENT_SET" };
-      resolution[key] = via;
-      const page = pageOf(node);
-      if (page) await page.loadAsync();
-      await harvest(node, seen, tokens, variableIds);
-      for (const child of node.findAll(() => true)) {
-        await harvest(child, seen, tokens, variableIds);
-      }
-    }
-    if (missing.length) {
+    const keyless = Object.entries(profile.components).filter(([, c]) => !c.key).map(([k]) => k);
+    if (keyless.length) {
       throw new Error(
-        `Components not found in "${figma.root.name}": ${missing.join(", ")}. Open the Leaf test file or a library file with the same components.`
+        `Library "${profile.name}" has no component keys for: ${keyless.join(", ")}. Run capture inside the library file and paste the output into its profile.`
       );
     }
-    return { source: figma.root.name, components, tokens, variableIds, resolution };
+    const failed = [];
+    for (const [ref, c] of Object.entries(profile.components)) {
+      try {
+        const node = c.isSet ? await figma.importComponentSetByKeyAsync(c.key) : await figma.importComponentByKeyAsync(c.key);
+        components[ref] = { nodeId: node.id, isSet: c.isSet };
+        resolution[ref] = "key";
+        await harvestTree(node, seen, tokens, variableIds);
+      } catch (e) {
+        failed.push(`${ref} ("${c.name}")`);
+      }
+    }
+    if (failed.length) {
+      throw new Error(
+        `Could not import from "${profile.name}": ${failed.join(", ")}. Enable the library in this file (Assets > Libraries) and sync again.`
+      );
+    }
+    return { source: profile.name, components, tokens, variableIds, resolution };
+  }
+  async function captureProfile(refs) {
+    const out = {};
+    for (const [ref, r] of Object.entries(refs)) {
+      const found = await resolveRef(r);
+      if (!found) throw new Error(`"${ref}" ("${r.name}") not found in "${figma.root.name}".`);
+      out[ref] = { key: found.node.key, isSet: found.node.type === "COMPONENT_SET", name: found.node.name };
+    }
+    return out;
+  }
+  async function isLibraryFile(profile, refs) {
+    if (figma.root.name === profile.sourceFile) return true;
+    const names = Object.keys(profile.components).map((k) => {
+      var _a, _b;
+      return (_b = (_a = refs[k]) == null ? void 0 : _a.name) != null ? _b : profile.components[k].name;
+    });
+    if (!names.length) return false;
+    for (const name of names) {
+      if (!await findComponentByName(name)) return false;
+    }
+    return true;
   }
 
   // src/library/refs.ts
@@ -103,6 +132,25 @@
     // set, default 1440x420
     "expanded-text": { nodeId: "2462:35759", name: "expanded text" }
     // set, default 4up, 1440 wide
+  };
+
+  // src/library/profiles/leaf.ts
+  var leaf = {
+    id: "leaf",
+    name: "Leaf Public Sites",
+    sourceFile: "Leaf Public Sites Lib-test (Copy)",
+    components: Object.fromEntries(
+      Object.entries(COMPONENT_REFS).map(([ref, r]) => [ref, { key: "", isSet: true, name: r.name }])
+    )
+  };
+
+  // src/library/registry.ts
+  var PROFILES = [leaf];
+  var DEFAULT_PROFILE_ID = "leaf";
+  var getProfile = (id) => {
+    const profile = PROFILES.find((p) => p.id === (id != null ? id : DEFAULT_PROFILE_ID));
+    if (!profile) throw new Error(`Unknown library "${id}".`);
+    return profile;
   };
 
   // src/templates/templateA.ts
@@ -365,25 +413,45 @@
   // src/code.ts
   figma.showUI(__html__, { width: 420, height: 600 });
   var snapshot = null;
+  var snapshotLibrary = null;
   var buildPage = (msg) => {
     var _a;
     return msg.template === "enguide" ? templateEnGuide() : templateA((_a = msg.seed) != null ? _a : { headline: "Headline", body: "Body", cta: "CTA" });
   };
   figma.ui.onmessage = async (msg) => {
     try {
+      if (msg.type === "init") {
+        figma.ui.postMessage({
+          type: "libraries",
+          libraries: PROFILES.map((p) => ({ id: p.id, name: p.name })),
+          defaultId: DEFAULT_PROFILE_ID,
+          file: figma.root.name,
+          isSource: PROFILES.some((p) => p.sourceFile === figma.root.name)
+        });
+      }
+      if (msg.type === "capture") {
+        const profile = getProfile(msg.libraryId);
+        const components = await captureProfile(COMPONENT_REFS);
+        figma.ui.postMessage({ type: "captured", libraryId: profile.id, json: JSON.stringify(components, null, 2) });
+      }
       if (msg.type === "sync") {
-        snapshot = await syncLibrary(COMPONENT_REFS);
-        const byName = Object.keys(snapshot.resolution).filter((k) => snapshot.resolution[k] === "name");
+        const profile = getProfile(msg.libraryId);
+        snapshot = await syncProfile(profile);
+        snapshotLibrary = profile.id;
         figma.ui.postMessage({
           type: "synced",
           source: snapshot.source,
           tokens: Object.keys(snapshot.tokens).length,
-          components: Object.keys(snapshot.components).length,
-          byName
+          components: Object.keys(snapshot.components).length
         });
       }
       if (msg.type === "generate") {
-        if (!snapshot) throw new Error("Sync the library first.");
+        if (!snapshot || !snapshotLibrary) throw new Error("Sync the library first.");
+        if (await isLibraryFile(getProfile(snapshotLibrary), COMPONENT_REFS)) {
+          throw new Error(
+            "This is a library file. Open your design file (or duplicate or branch this one in Figma) and run the plugin there."
+          );
+        }
         const page = buildPage(msg);
         const figmaPage = await pageIRToFigma(page, snapshot);
         const html = pageToHtml(page, snapshot.tokens);

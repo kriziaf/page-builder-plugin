@@ -12,7 +12,12 @@
 </style>
 </head>
 <body>
+  <label>Library
+    <select id="library"></select>
+  </label>
   <button id="sync">Sync library</button>
+  <button id="capture" hidden>Capture keys (library file)</button>
+  <textarea id="captured" rows="6" hidden readonly></textarea>
   <label>Template
     <select id="template">
       <option value="enguide">EnGuide Pharmacy (6 sections)</option>
@@ -28,14 +33,26 @@
 <script>
   const status = document.getElementById("status");
   const generate = document.getElementById("generate");
-  document.getElementById("sync").onclick = () => parent.postMessage({ pluginMessage: { type: "sync" } }, "*");
+  const post = (m) => parent.postMessage({ pluginMessage: m }, "*");
+  const library = document.getElementById("library");
+  const capture = document.getElementById("capture");
+  const captured = document.getElementById("captured");
+  document.getElementById("sync").onclick = () => post({ type: "sync", libraryId: library.value });
+  capture.onclick = () => post({ type: "capture", libraryId: library.value });
+  post({ type: "init" });
   generate.onclick = () => parent.postMessage({ pluginMessage: { type: "generate", template: template.value, seed: {
     headline: headline.value, body: body.value, cta: cta.value } } }, "*");
   onmessage = (e) => {
     const m = e.data.pluginMessage;
     if (!m) return;
-    if (m.type === "synced") { status.textContent = `Library "${m.source}": ${m.components} components, ${m.tokens} tokens.` +
-      (m.byName.length ? ` Found by name (not reference IDs): ${m.byName.join(", ")}.` : ""); generate.disabled = false; }
+    if (m.type === "libraries") {
+      library.innerHTML = m.libraries.map((l) => `<option value="${l.id}">${l.name}</option>`).join("");
+      library.value = m.defaultId;
+      capture.hidden = !m.isSource;
+      status.textContent = m.isSource ? `"${m.file}" is a library file. Capture keys here; generate in a design file.` : "";
+    }
+    if (m.type === "captured") { captured.value = m.json; captured.hidden = false; status.textContent = "Paste this over components in the library profile."; }
+    if (m.type === "synced") { status.textContent = `Library "${m.source}": ${m.components} components, ${m.tokens} tokens.`; generate.disabled = false; }
     if (m.type === "generated") { preview.srcdoc = m.html; status.textContent = "Generated."; }
     if (m.type === "error") status.textContent = m.message;
   };

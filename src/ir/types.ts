@@ -56,5 +56,5 @@ export type LibrarySnapshot = {
   components: Record<string, { nodeId: string; isSet: boolean }>;
   tokens: TokenMap; // token name ("base.spacing.24") -> resolved value (hex or number as string)
   variableIds: Record<string, string>; // token name -> Figma variable id
-  resolution: Record<string, "id" | "name">; // how each component was found: reference node ID or by name
+  resolution: Record<string, "id" | "name" | "key">; // how each component was found: node ID, name, or library key
 };

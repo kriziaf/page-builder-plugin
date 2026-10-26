@@ -73,3 +73,18 @@ Current version: **0.1.0**
 ## License
 
 Private
+
+## Sources and targets
+
+The library is a source; the plugin writes only into the design file you have open.
+
+1. Enable the library in your design file (Assets > Libraries).
+2. Open the plugin, pick the library, click **Sync library**, then **Generate page**.
+3. The plugin refuses to generate inside a library file. Duplicate or branch the file in Figma and run it there.
+
+### Adding a library
+
+Library profiles live in `src/library/profiles/`. Component keys differ per library file, so for a new
+library: open the library file, pick it in the dropdown, click **Capture keys**, and paste the output
+as `components` in a new profile (register it in `src/library/registry.ts`). The Leaf profile ships
+without keys and needs one capture run.

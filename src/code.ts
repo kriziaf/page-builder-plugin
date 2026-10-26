@@ -1,4 +1,5 @@
-import { syncLibrary } from "./library/sync";
+import { captureProfile, isLibraryFile, syncProfile } from "./library/sync";
+import { DEFAULT_PROFILE_ID, getProfile, PROFILES } from "./library/registry";
 import { COMPONENT_REFS } from "./library/refs";
 import { templateA } from "./templates/templateA";
 import { templateEnGuide } from "./templates/templateEnGuide";
@@ -6,13 +7,14 @@ import { pageIRToFigma } from "./ir/toFigma";
 import { pageToHtml } from "./ir/toHtml";
 import type { LibrarySnapshot, PageIR } from "./ir/types";
 
-// Runs inside the open library file. "Leaf Public Sites Lib-test (Copy)" (file key kMEfNfi0711kmQrGbcPZkm)
-// is the reference: its node IDs are tried first, then components are found by name; see src/library/refs.ts.
+// Runs in the user's design file. The library is a selectable source: its components are imported
+// by key (the library must be enabled in this file). The plugin never generates into a library file.
 
 figma.showUI(__html__, { width: 420, height: 600 });
 
-// Snapshot cached per session. Re-sync when the library changes.
+// Snapshot cached per session, with the library it came from. Re-sync when the library changes.
 let snapshot: LibrarySnapshot | null = null;
+let snapshotLibrary: string | null = null;
 
 const buildPage = (msg: { [k: string]: any }): PageIR =>
   msg.template === "enguide"
@@ -21,20 +23,41 @@ const buildPage = (msg: { [k: string]: any }): PageIR =>
 
 figma.ui.onmessage = async (msg: { type: string; [k: string]: any }) => {
   try {
+    if (msg.type === "init") {
+      figma.ui.postMessage({
+        type: "libraries",
+        libraries: PROFILES.map((p) => ({ id: p.id, name: p.name })),
+        defaultId: DEFAULT_PROFILE_ID,
+        file: figma.root.name,
+        isSource: PROFILES.some((p) => p.sourceFile === figma.root.name),
+      });
+    }
+
+    if (msg.type === "capture") {
+      const profile = getProfile(msg.libraryId);
+      const components = await captureProfile(COMPONENT_REFS);
+      figma.ui.postMessage({ type: "captured", libraryId: profile.id, json: JSON.stringify(components, null, 2) });
+    }
+
     if (msg.type === "sync") {
-      snapshot = await syncLibrary(COMPONENT_REFS);
-      const byName = Object.keys(snapshot.resolution).filter((k) => snapshot!.resolution[k] === "name");
+      const profile = getProfile(msg.libraryId);
+      snapshot = await syncProfile(profile);
+      snapshotLibrary = profile.id;
       figma.ui.postMessage({
         type: "synced",
         source: snapshot.source,
         tokens: Object.keys(snapshot.tokens).length,
         components: Object.keys(snapshot.components).length,
-        byName,
       });
     }
 
     if (msg.type === "generate") {
-      if (!snapshot) throw new Error("Sync the library first.");
+      if (!snapshot || !snapshotLibrary) throw new Error("Sync the library first.");
+      if (await isLibraryFile(getProfile(snapshotLibrary), COMPONENT_REFS)) {
+        throw new Error(
+          "This is a library file. Open your design file (or duplicate or branch this one in Figma) and run the plugin there.",
+        );
+      }
       const page = buildPage(msg);
       const figmaPage = await pageIRToFigma(page, snapshot);
       const html = pageToHtml(page, snapshot.tokens);
