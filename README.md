@@ -97,6 +97,7 @@ without keys and needs one capture run.
 | `v0.1.1` | Runs in any file with the same components (name fallback) |
 | `v0.2.0` | Separate template-system refactor (`4e9f492`), not in this branch |
 | `v0.3.0` | Library as source; generates only in a design file |
+| `v0.4.0` | Guided flow, Leaf `local` mode default, one sandbox page for generated frames |
 
 `git fetch --tags && git checkout v0.1.0`. See `CHANGELOG.md`.
 

@@ -3,7 +3,7 @@
 Older versions stay reachable as git tags: `git fetch --tags && git checkout <tag>`.
 `dist/` is committed, so every tag can be loaded in Figma without a build.
 
-## Unreleased
+## v0.4.0
 Leaf profile is `local` mode again: components come from pages of the open file (reference node ID, then
 name) instead of import by key. `keys` mode and the library-file guard stay for libraries enabled in a
 design file. Generated frames now collect on one "Page Template Sandbox NN" page, side by side. Guided flow added (`specs/001-guided-flow`).
