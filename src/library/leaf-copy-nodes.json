@@ -1,0 +1,16 @@
+{
+  "file": "Leaf Public Sites Lib-test (Copy)",
+  "fileKey": "kMEfNfi0711kmQrGbcPZkm",
+  "verifiedAt": "2026-10-26",
+  "note": "Local components, referenced by node ID. Valid only inside this file. Tokens are remote variables read through bound nodes.",
+  "components": {
+    "overview-cards": { "nodeId": "5048:69686", "type": "componentSet", "variants": 10, "page": "Overview Card" },
+    "promo-banner": { "nodeId": "5053:3390", "type": "componentSet", "variants": 24, "page": "Promo Banner" },
+    "banner-feature": { "nodeId": "5076:22893", "type": "componentSet", "variants": 6, "page": "Promo Banner" },
+    "text-media": { "nodeId": "2462:35747", "type": "componentSet", "variants": 4, "page": "Text and Media" },
+    "two-col-form": { "nodeId": "2611:83308", "type": "componentSet", "variants": 2, "page": "Form" },
+    "accent-card": { "nodeId": "2501:32472", "type": "componentSet", "variants": 4, "page": "Accent Cards" }
+  },
+  "notFound": ["hero-primary (Hero page only has toolbar/banner components)", "hero-secondary", "highlight-band", "color/content/inverse token"],
+  "tokenCollections": ["Globals: All Brands", "Inverse: Variables", "Semantic: All Brands"]
+}

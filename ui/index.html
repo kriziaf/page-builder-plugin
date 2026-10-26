@@ -1,0 +1,43 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  body { font-family: sans-serif; font-size: 13px; margin: 16px; color: #1a1a1a; }
+  label { display: block; margin-top: 10px; font-weight: 600; }
+  input, textarea { width: 100%; box-sizing: border-box; margin-top: 4px; padding: 6px; font: inherit; }
+  button { margin-top: 14px; padding: 8px 12px; font: inherit; cursor: pointer; }
+  #status { margin-top: 10px; color: #555; }
+  #preview { margin-top: 12px; border: 1px solid #ddd; width: 100%; height: 260px; }
+</style>
+</head>
+<body>
+  <button id="sync">Sync library</button>
+  <label>Template
+    <select id="template">
+      <option value="enguide">EnGuide Pharmacy (6 sections)</option>
+      <option value="A">Template A (hero + overview cards + CTA)</option>
+    </select>
+  </label>
+  <label>Headline <input id="headline" value="Care that fits your life"></label>
+  <label>Body <textarea id="body" rows="2">Find providers, plan visits, and manage your benefits in one place.</textarea></label>
+  <label>CTA <input id="cta" value="Find a provider"></label>
+  <button id="generate" disabled>Generate page</button>
+  <div id="status"></div>
+  <iframe id="preview" sandbox=""></iframe>
+<script>
+  const status = document.getElementById("status");
+  const generate = document.getElementById("generate");
+  document.getElementById("sync").onclick = () => parent.postMessage({ pluginMessage: { type: "sync" } }, "*");
+  generate.onclick = () => parent.postMessage({ pluginMessage: { type: "generate", template: template.value, seed: {
+    headline: headline.value, body: body.value, cta: cta.value } } }, "*");
+  onmessage = (e) => {
+    const m = e.data.pluginMessage;
+    if (!m) return;
+    if (m.type === "synced") { status.textContent = `Synced ${m.tokens} color tokens.`; generate.disabled = false; }
+    if (m.type === "generated") { preview.srcdoc = m.html; status.textContent = "Generated."; }
+    if (m.type === "error") status.textContent = m.message;
+  };
+</script>
+</body>
+</html>
