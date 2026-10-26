@@ -3,7 +3,7 @@
 import { syncLibrary } from "./library/sync";
 import { COMPONENT_REFS } from "./library/refs";
 import { pageIRToFigma } from "./ir/toFigma";
-import { templateEnGuide } from "./templates/templateEnGuide";
+import { getTemplate } from "./templates";
 
 export const sync = () => syncLibrary(COMPONENT_REFS);
-export const buildEnGuide = (snap: Awaited<ReturnType<typeof sync>>) => pageIRToFigma(templateEnGuide(), snap);
+export const build = (id: string, snap: Awaited<ReturnType<typeof sync>>) => pageIRToFigma(getTemplate(id).build({ headline: "Headline", body: "Body", cta: "CTA" }), snap);

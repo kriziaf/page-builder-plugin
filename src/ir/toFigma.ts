@@ -131,11 +131,55 @@ export async function nodeToFigma(node: IRNode, snap: LibrarySnapshot, parent: F
   }
 }
 
-export async function pageIRToFigma(page: PageIR, snap: LibrarySnapshot): Promise<PageNode> {
-  const figmaPage = figma.createPage();
-  figmaPage.name = page.name;
+const NS = "sample_gen"; // shared plugin data works in every host runtime
+const TAG = "sampleGen";
+const LAST = "lastGeneratedId";
+const OUTPUT_PAGE = "Generated page";
+
+const pageOf = (n: BaseNode): PageNode | null => {
+  let p: BaseNode | null = n;
+  while (p && p.type !== "PAGE") p = p.parent;
+  return p as PageNode | null;
+};
+
+// Where the next generation goes. Order: a selected frame the plugin made, then the last frame it made.
+async function findTarget(): Promise<FrameNode | null> {
+  for (const n of figma.currentPage.selection) {
+    let f: BaseNode | null = n;
+    while (f && !(f.type === "FRAME" && f.getSharedPluginData(NS, TAG))) f = f.parent;
+    if (f) return f as FrameNode;
+  }
+  const id = figma.root.getSharedPluginData(NS, LAST);
+  if (!id) return null;
+  const n = await figma.getNodeByIdAsync(id);
+  return n && !n.removed && n.type === "FRAME" ? n : null;
+}
+
+// Each generation replaces the previous frame in place (same page, parent and position),
+// so the design stays in one layer. First run creates a "Generated page" page.
+export async function pageIRToFigma(page: PageIR, snap: LibrarySnapshot): Promise<FrameNode> {
+  const target = await findTarget();
+  let figmaPage: PageNode;
+  let x = 0;
+  let y = 0;
+  if (target) {
+    figmaPage = pageOf(target)!;
+    await figmaPage.loadAsync();
+    x = target.x;
+    y = target.y;
+  } else {
+    figmaPage = figma.createPage();
+    figmaPage.name = OUTPUT_PAGE;
+  }
   await figma.setCurrentPageAsync(figmaPage);
-  const root = await nodeToFigma(page.root, snap, figmaPage);
-  if ("resize" in root) root.resize(page.width, root.height);
-  return figmaPage;
+  const root = (await nodeToFigma(page.root, snap, figmaPage)) as FrameNode;
+  root.resize(page.width, root.height);
+  root.x = x;
+  root.y = y;
+  root.setSharedPluginData(NS, TAG, "1");
+  if (target) target.remove();
+  figma.root.setSharedPluginData(NS, LAST, root.id);
+  figma.currentPage.selection = [root];
+  figma.viewport.scrollAndZoomIntoView([root]);
+  return root;
 }

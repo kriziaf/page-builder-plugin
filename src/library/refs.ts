@@ -11,5 +11,7 @@ export const COMPONENT_REFS: ComponentRefs = {
   "two-col-form": { nodeId: "2611:83308" }, // set, 2 variants
   "accent-card": { nodeId: "2501:32472" }, // set, 4 variants
   "secondary-hero": { nodeId: "5710:6195" }, // set "Secondary Hero - Full Width", default 1440x420
+  "highlight-band": { nodeId: "2520:45914" }, // set, page "Metrics band"
+  "bullet-text": { nodeId: "2545:8954" }, // set "bullet text"
   "expanded-text": { nodeId: "2462:35759" }, // set "expanded text", default 4up, 1440 wide
 };

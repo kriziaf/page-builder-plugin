@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git config *)",
+      "Bash(git commit *)",
+      "Bash(git remote *)",
+      "Bash(git branch *)",
+      "Bash(git push *)",
+      "Bash(git add *)",
+      "Bash(git tag *)",
+      "Bash(cp -r \"/Users/krizfernux/Documents/Claude-tests/plugin/draft/figma-sample-generator \\(2\\)\"/src/* /Users/krizfernux/Documents/Claude-tests/plugin/figma-sample-generator/src/)",
+      "Bash(cp \"/Users/krizfernux/Documents/Claude-tests/plugin/draft/figma-sample-generator \\(2\\)\"/ui/index.html /Users/krizfernux/Documents/Claude-tests/plugin/figma-sample-generator/ui/index.html)"
+    ]
+  }
+}
