@@ -292,6 +292,21 @@
     };
   }
 
+  // src/ir/sandbox.ts
+  var PREFIX = "Page Template Sandbox";
+  var sandboxName = (n) => `${PREFIX} ${String(n).padStart(2, "0")}`;
+  var parseSandbox = (name) => {
+    const m = new RegExp(`^${PREFIX} (\\d+)$`).exec(name);
+    return m ? parseInt(m[1], 10) : null;
+  };
+  function pickSandbox(pageNames, startNew) {
+    const nums = pageNames.map(parseSandbox).filter((n) => n !== null);
+    if (!nums.length) return { name: sandboxName(1), create: true };
+    const latest = Math.max(...nums);
+    return startNew ? { name: sandboxName(latest + 1), create: true } : { name: sandboxName(latest), create: false };
+  }
+  var nextX = (frames, gap = 200) => frames.length ? Math.max(...frames.map((f) => f.x + f.width)) + gap : 0;
+
   // src/ir/toFigma.ts
   var TEXT_SIZES = {
     display: { size: 56, weight: "Bold" },
@@ -401,13 +416,24 @@
       }
     }
   }
-  async function pageIRToFigma(page, snap) {
-    const figmaPage = figma.createPage();
-    figmaPage.name = `${page.name} (${(/* @__PURE__ */ new Date()).toISOString().slice(0, 16).replace("T", " ")})`;
-    await figma.setCurrentPageAsync(figmaPage);
-    const root = await nodeToFigma(page.root, snap, figmaPage);
+  async function pageIRToFigma(page, snap, opts = {}) {
+    const pick = pickSandbox(figma.root.children.map((p) => p.name), !!opts.newSandbox);
+    let sandbox = figma.root.children.find((p) => p.name === pick.name);
+    if (!sandbox || pick.create) {
+      sandbox = figma.createPage();
+      sandbox.name = pick.name;
+    }
+    await sandbox.loadAsync();
+    const x = nextX(sandbox.children.map((n) => ({ x: n.x, width: n.width })));
+    await figma.setCurrentPageAsync(sandbox);
+    const root = await nodeToFigma(page.root, snap, sandbox);
     if ("resize" in root) root.resize(page.width, root.height);
-    return figmaPage;
+    root.name = `${page.name} (${(/* @__PURE__ */ new Date()).toISOString().slice(0, 16).replace("T", " ")})`;
+    root.x = x;
+    root.y = 0;
+    sandbox.selection = [root];
+    figma.viewport.scrollAndZoomIntoView([root]);
+    return { page: sandbox, frame: root };
   }
 
   // src/ir/toHtml.ts
@@ -647,9 +673,9 @@
           const snap = snapshot;
           page = buildFromSections(msg.pageType, msg.brief, msg.sections, (key) => key in snap.components);
         }
-        const figmaPage = await pageIRToFigma(page, snapshot);
+        const { page: sandbox, frame } = await pageIRToFigma(page, snapshot, { newSandbox: !!msg.newSandbox });
         const html = pageToHtml(page, snapshot.tokens);
-        figma.notify(`Created page "${figmaPage.name}"`);
+        figma.notify(`Added "${frame.name}" to ${sandbox.name}`);
         figma.ui.postMessage({ type: "generated", html });
       }
     } catch (e) {

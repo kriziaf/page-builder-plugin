@@ -47,6 +47,7 @@
 
   <section class="step" id="s3">
     <div id="summary"></div>
+    <label><input type="checkbox" id="newSandbox" style="width:auto"> Start new sandbox page</label>
     <button id="generate">Generate page</button>
     <details><summary>Advanced: start from a preset</summary>
       <select id="preset"><option value="enguide">EnGuide Pharmacy (6 sections)</option><option value="A">Starter (hero, cards, CTA)</option></select>
@@ -112,9 +113,9 @@
     listMsg({ op: b.dataset.op, pattern: b.dataset.p, dir: Number(b.dataset.dir) });
   };
   $("add").onclick = () => listMsg({ op: "add", pattern: $("addable").value });
-  $("generate").onclick = () => post({ type: "generate", pageType: $("pageType").value, brief: brief(),
+  $("generate").onclick = () => post({ type: "generate", newSandbox: $("newSandbox").checked, pageType: $("pageType").value, brief: brief(),
     sections: state.sections.map(({ pattern, required, variant }) => ({ pattern, required, variant })) });
-  $("genPreset").onclick = () => post({ type: "generate", preset: $("preset").value,
+  $("genPreset").onclick = () => post({ type: "generate", newSandbox: $("newSandbox").checked, preset: $("preset").value,
     seed: { headline: "Care that fits your life", body: "Find providers, plan visits, and manage your benefits in one place.", cta: "Find a provider" } });
 
   onmessage = (e) => {

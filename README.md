@@ -103,3 +103,8 @@ without keys and needs one capture run.
 ## Specs
 
 Feature specs live in `specs/`. Current: [`specs/001-guided-flow`](specs/001-guided-flow/spec.md).
+
+## Where pages go
+
+Every Generate adds a timestamped frame to the latest "Page Template Sandbox NN" page, to the right of earlier
+frames. Tick "Start new sandbox page" to begin the next number. Nothing is replaced.

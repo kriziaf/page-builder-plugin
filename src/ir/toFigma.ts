@@ -1,4 +1,5 @@
 import type { IRNode, Layout, TokenRef, PageIR, LibrarySnapshot } from "./types";
+import { nextX, pickSandbox } from "./sandbox";
 
 // Runs inside the Figma plugin sandbox. Depends only on the `figma` global.
 // Colors, spacing and radii bind to the file's variables. An unknown token throws,
@@ -131,12 +132,27 @@ export async function nodeToFigma(node: IRNode, snap: LibrarySnapshot, parent: F
   }
 }
 
-export async function pageIRToFigma(page: PageIR, snap: LibrarySnapshot): Promise<PageNode> {
-  const figmaPage = figma.createPage();
-  // Time-stamped so repeated runs never collide with, or overwrite, earlier generated pages.
-  figmaPage.name = `${page.name} (${new Date().toISOString().slice(0, 16).replace("T", " ")})`;
-  await figma.setCurrentPageAsync(figmaPage);
-  const root = await nodeToFigma(page.root, snap, figmaPage);
+export async function pageIRToFigma(
+  page: PageIR,
+  snap: LibrarySnapshot,
+  opts: { newSandbox?: boolean } = {},
+): Promise<{ page: PageNode; frame: FrameNode }> {
+  // All generations land on one "Page Template Sandbox NN" page, side by side; nothing is replaced.
+  const pick = pickSandbox(figma.root.children.map((p) => p.name), !!opts.newSandbox);
+  let sandbox = figma.root.children.find((p) => p.name === pick.name);
+  if (!sandbox || pick.create) {
+    sandbox = figma.createPage();
+    sandbox.name = pick.name;
+  }
+  await sandbox.loadAsync(); // dynamic-page access
+  const x = nextX(sandbox.children.map((n) => ({ x: n.x, width: n.width })));
+  await figma.setCurrentPageAsync(sandbox);
+  const root = await nodeToFigma(page.root, snap, sandbox);
   if ("resize" in root) root.resize(page.width, root.height);
-  return figmaPage;
+  root.name = `${page.name} (${new Date().toISOString().slice(0, 16).replace("T", " ")})`;
+  root.x = x;
+  root.y = 0;
+  sandbox.selection = [root];
+  figma.viewport.scrollAndZoomIntoView([root]);
+  return { page: sandbox, frame: root as FrameNode };
 }

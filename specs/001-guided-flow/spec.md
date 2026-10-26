@@ -8,7 +8,7 @@
 ## Scope
 
 Tracks the plan approved on 2026-10-26. Related decisions already shipped: library as a selectable source,
-one new timestamped page per run. Update 2026-10-26: the default Leaf profile is `local` mode, which reads components from pages of the open file and generates there (no key import, no library guard); `keys` mode keeps import-by-key and the guard.
+one timestamped frame per run on a shared sandbox page. Update 2026-10-26: the default Leaf profile is `local` mode, which reads components from pages of the open file and generates there (no key import, no library guard); `keys` mode keeps import-by-key and the guard.
 
 ### Adapted from the web-prototype spec
 
@@ -37,7 +37,7 @@ one new timestamped page per run. Update 2026-10-26: the default Leaf profile is
 - **FR-005**: Sections can be reordered and removed (optional ones). Changing page type resets the list.
 - **FR-006**: Audience is required to leave the Brief screen. At least one section is required to leave Sections.
 - **FR-007**: Entries survive Back/Forward navigation.
-- **FR-008**: Generate builds a vertical stack of library instances in section order at 1440 wide, in the open file, on a new timestamped page. In `keys` mode it refuses to run inside a library file; in `local` mode (Leaf default) it runs in the library test file.
+- **FR-008**: Generate builds a vertical stack of library instances in section order at 1440 wide, in the open file, as a new timestamped frame on the latest "Page Template Sandbox NN" page, placed to the right of earlier frames (nothing is replaced; a "Start new sandbox" checkbox starts the next number). In `keys` mode it refuses to run inside a library file; in `local` mode (Leaf default) it runs in the library test file.
 - **FR-009**: A pattern with no component in the synced library renders as a labeled placeholder frame instead of failing.
 - **FR-010**: The pasted brief is stored and shown to the user, not parsed into fields.
 - **FR-011**: Existing templates (EnGuide, Starter) remain available as an "Advanced: preset".
@@ -74,6 +74,7 @@ Horizontal Cards, External Link Cards, Graphic Cards, Bullet Image.
 | Generate stack + placeholders + library guard (FR-008, 009) | Built; not run in Figma |
 | Pasted brief stored (FR-010) | Built |
 | Presets under Advanced (FR-011) | Built |
+| Sandbox page, frames side by side, new-sandbox checkbox | Built, unit-tested helpers; not run in Figma |
 | Library screen: enabled/captured state shown | **Not built.** Only sync success gates Next. |
 | Section variant picker | **Not built.** Variant property names in the library are unverified. |
 | Export HTML | **Not built.** The preview iframe shows the HTML; no download. |

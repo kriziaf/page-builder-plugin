@@ -86,9 +86,9 @@ figma.ui.onmessage = async (msg: { type: string; [k: string]: any }) => {
         const snap = snapshot;
         page = buildFromSections(msg.pageType, msg.brief, msg.sections, (key) => key in snap.components);
       }
-      const figmaPage = await pageIRToFigma(page, snapshot);
+      const { page: sandbox, frame } = await pageIRToFigma(page, snapshot, { newSandbox: !!msg.newSandbox });
       const html = pageToHtml(page, snapshot.tokens);
-      figma.notify(`Created page "${figmaPage.name}"`);
+      figma.notify(`Added "${frame.name}" to ${sandbox.name}`);
       figma.ui.postMessage({ type: "generated", html });
     }
   } catch (e) {
