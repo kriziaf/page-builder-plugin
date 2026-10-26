@@ -94,7 +94,8 @@ without keys and needs one capture run.
 | Tag | Behavior |
 | --- | --- |
 | `v0.1.0` | Leaf test file only; writes pages into that file (simple tests) |
-| `v0.2.0` | Runs in any file with the same components (name fallback) |
+| `v0.1.1` | Runs in any file with the same components (name fallback) |
+| `v0.2.0` | Separate template-system refactor (`4e9f492`), not in this branch |
 | `v0.3.0` | Library as source; generates only in a design file |
 
 `git fetch --tags && git checkout v0.1.0`. See `CHANGELOG.md`.
