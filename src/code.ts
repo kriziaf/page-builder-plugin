@@ -5,12 +5,17 @@ import { templateA } from "./templates/templateA";
 import { templateEnGuide } from "./templates/templateEnGuide";
 import { pageIRToFigma } from "./ir/toFigma";
 import { pageToHtml } from "./ir/toHtml";
+import { PAGE_TYPES } from "./flow/pageTypes";
+import { getPattern } from "./flow/patterns";
+import { addSection, addable, moveSection, recommended, removeSection, validateGenerate } from "./flow/sections";
+import type { Section } from "./flow/sections";
+import { buildFromSections } from "./flow/build";
 import type { LibrarySnapshot, PageIR } from "./ir/types";
 
 // Runs in the user's design file. The library is a selectable source: its components are imported
 // by key (the library must be enabled in this file). The plugin never generates into a library file.
 
-figma.showUI(__html__, { width: 420, height: 600 });
+figma.showUI(__html__, { width: 420, height: 640 });
 
 // Snapshot cached per session, with the library it came from. Re-sync when the library changes.
 let snapshot: LibrarySnapshot | null = null;
@@ -30,6 +35,19 @@ figma.ui.onmessage = async (msg: { type: string; [k: string]: any }) => {
         defaultId: DEFAULT_PROFILE_ID,
         file: figma.root.name,
         isSource: PROFILES.some((p) => p.sourceFile === figma.root.name),
+        pageTypes: PAGE_TYPES.map((t) => ({ id: t.id, label: t.label })),
+      });
+    }
+
+    if (msg.type === "sections") {
+      let list: Section[] = msg.op === "reset" ? recommended(msg.pageType) : msg.sections;
+      if (msg.op === "add") list = addSection(msg.pageType, list, msg.pattern);
+      if (msg.op === "remove") list = removeSection(list, msg.pattern);
+      if (msg.op === "move") list = moveSection(list, msg.pattern, msg.dir);
+      figma.ui.postMessage({
+        type: "sections",
+        sections: list.map((x) => ({ ...x, label: getPattern(x.pattern).label })),
+        addable: addable(msg.pageType, list).map((id) => ({ id, label: getPattern(id).label })),
       });
     }
 
@@ -58,7 +76,14 @@ figma.ui.onmessage = async (msg: { type: string; [k: string]: any }) => {
           "This is a library file. Open your design file (or duplicate or branch this one in Figma) and run the plugin there.",
         );
       }
-      const page = buildPage(msg);
+      let page: PageIR;
+      if (msg.preset) {
+        page = buildPage({ template: msg.preset, seed: msg.seed });
+      } else {
+        validateGenerate(msg.pageType, msg.brief, msg.sections);
+        const snap = snapshot;
+        page = buildFromSections(msg.pageType, msg.brief, msg.sections, (key) => key in snap.components);
+      }
       const figmaPage = await pageIRToFigma(page, snapshot);
       const html = pageToHtml(page, snapshot.tokens);
       figma.notify(`Created page "${figmaPage.name}"`);

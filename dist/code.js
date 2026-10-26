@@ -1,5 +1,25 @@
 "use strict";
 (() => {
+  var __defProp = Object.defineProperty;
+  var __defProps = Object.defineProperties;
+  var __getOwnPropDescs = Object.getOwnPropertyDescriptors;
+  var __getOwnPropSymbols = Object.getOwnPropertySymbols;
+  var __hasOwnProp = Object.prototype.hasOwnProperty;
+  var __propIsEnum = Object.prototype.propertyIsEnumerable;
+  var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+  var __spreadValues = (a, b) => {
+    for (var prop in b || (b = {}))
+      if (__hasOwnProp.call(b, prop))
+        __defNormalProp(a, prop, b[prop]);
+    if (__getOwnPropSymbols)
+      for (var prop of __getOwnPropSymbols(b)) {
+        if (__propIsEnum.call(b, prop))
+          __defNormalProp(a, prop, b[prop]);
+      }
+    return a;
+  };
+  var __spreadProps = (a, b) => __defProps(a, __getOwnPropDescs(b));
+
   // src/library/sync.ts
   var toHex = (n) => Math.round(n * 255).toString(16).padStart(2, "0");
   var rgbToHex = (c) => `#${toHex(c.r)}${toHex(c.g)}${toHex(c.b)}`;
@@ -410,8 +430,136 @@
     return `<!doctype html><html><head><meta charset="utf-8"><style>:root{${vars}}body{margin:0;font-family:sans-serif}</style></head><body><div style="width:${page.width}px">${nodeToHtml(page.root)}</div></body></html>`;
   }
 
+  // src/flow/pageTypes.ts
+  var ARTICLE = [
+    { pattern: "hero-secondary", required: true },
+    { pattern: "longform-text", required: true },
+    { pattern: "text-media" },
+    { pattern: "horizontal-cards" },
+    { pattern: "external-link-cards" },
+    { pattern: "accent-cards", required: true }
+  ];
+  var PAGE_TYPES = [
+    {
+      id: "business",
+      label: "Business Page",
+      sections: [
+        { pattern: "hero-primary", required: true },
+        { pattern: "overview-cards" },
+        { pattern: "text-media" },
+        { pattern: "accent-cards", required: true },
+        { pattern: "promo-banner" },
+        { pattern: "two-col-form", required: true }
+      ]
+    },
+    { id: "article", label: "Article", sections: ARTICLE },
+    { id: "blog", label: "Blog", sections: ARTICLE },
+    // same as Article until Blog sections are defined
+    {
+      id: "services",
+      label: "Services",
+      sections: [
+        { pattern: "hero-primary", required: true },
+        { pattern: "external-link-cards" },
+        { pattern: "expanded-text" },
+        { pattern: "text-media" },
+        { pattern: "accent-cards" },
+        { pattern: "promo-banner", required: true },
+        { pattern: "two-col-form" }
+      ]
+    }
+  ];
+  var getPageType = (id) => {
+    const t = PAGE_TYPES.find((x) => x.id === id);
+    if (!t) throw new Error(`Unknown page type "${id}".`);
+    return t;
+  };
+
+  // src/flow/patterns.ts
+  var PATTERNS = [
+    { id: "overview-cards", label: "Overview Cards", componentKey: "overview-cards" },
+    { id: "accent-cards", label: "Accent Cards", componentKey: "accent-card" },
+    { id: "graphic-cards", label: "Graphic Cards" },
+    { id: "horizontal-cards", label: "Horizontal Cards" },
+    { id: "external-link-cards", label: "External Link Cards" },
+    { id: "bullet-image", label: "Bullet Image" },
+    { id: "text-media", label: "Text Media", componentKey: "text-media" },
+    { id: "expanded-text", label: "Expanded Text", componentKey: "expanded-text" },
+    { id: "longform-text", label: "Longform Text" },
+    { id: "hero-primary", label: "Hero Primary" },
+    { id: "hero-secondary", label: "Hero Secondary", componentKey: "secondary-hero" },
+    { id: "two-col-form", label: "Two-Col Form", componentKey: "two-col-form" },
+    { id: "promo-banner", label: "Promo Banner Card", componentKey: "promo-banner" },
+    { id: "highlight-band", label: "Highlight Band" }
+  ];
+  var getPattern = (id) => {
+    const p = PATTERNS.find((x) => x.id === id);
+    if (!p) throw new Error(`Unknown pattern "${id}".`);
+    return p;
+  };
+
+  // src/flow/sections.ts
+  var recommended = (pageType) => getPageType(pageType).sections.map((s) => ({ pattern: s.pattern, required: !!s.required }));
+  var requiredOf = (pageType) => getPageType(pageType).sections.filter((s) => s.required);
+  var allowedOn = (pageType, pattern) => pattern !== "hero-primary" || pageType === "business" || pageType === "services";
+  var addable = (pageType, sections) => PATTERNS.map((p) => p.id).filter(
+    (id) => allowedOn(pageType, id) && !sections.some((s) => s.pattern === id)
+  );
+  var addSection = (pageType, sections, pattern) => {
+    if (!addable(pageType, sections).includes(pattern)) throw new Error(`"${pattern}" cannot be added.`);
+    const required = requiredOf(pageType).some((s) => s.pattern === pattern);
+    return [...sections, { pattern, required }];
+  };
+  var removeSection = (sections, pattern) => {
+    const s = sections.find((x) => x.pattern === pattern);
+    if (s == null ? void 0 : s.required) return sections;
+    return sections.filter((x) => x.pattern !== pattern);
+  };
+  var moveSection = (sections, pattern, dir) => {
+    const i = sections.findIndex((x) => x.pattern === pattern);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= sections.length) return sections;
+    const next = sections.slice();
+    [next[i], next[j]] = [next[j], next[i]];
+    return next;
+  };
+  function validateGenerate(pageType, brief, sections) {
+    var _a;
+    if (!((_a = brief.audience) == null ? void 0 : _a.trim())) throw new Error("Add an audience in the brief first.");
+    if (!sections.length) throw new Error("Add at least one section.");
+    for (const s of requiredOf(pageType)) {
+      if (!sections.some((x) => x.pattern === s.pattern)) {
+        throw new Error(`"${getPattern(s.pattern).label}" is required for this page type.`);
+      }
+    }
+  }
+
+  // src/flow/build.ts
+  function buildFromSections(pageType, brief, sections, hasComponent) {
+    const type = getPageType(pageType);
+    const children = sections.map((s) => {
+      const pattern = getPattern(s.pattern);
+      if (pattern.componentKey && hasComponent(pattern.componentKey)) {
+        const variants = pattern.variants && s.variant ? { [pattern.variants.prop]: s.variant } : void 0;
+        return { kind: "instance", name: pattern.label, componentKey: pattern.componentKey, variants };
+      }
+      return {
+        kind: "frame",
+        name: `${pattern.label} (placeholder)`,
+        layout: { direction: "column", gap: 0, padding: 40 },
+        width: "fill",
+        children: [
+          { kind: "text", name: "Label", text: `${pattern.label}: no component in this library`, style: "heading", width: "fill" }
+        ]
+      };
+    });
+    const name = `${type.label} - ${brief.audience.trim()}`;
+    const root = { kind: "frame", name, layout: { direction: "column", gap: 0, padding: 0 }, children };
+    return { template: `flow-${type.id}`, name, width: 1440, root };
+  }
+
   // src/code.ts
-  figma.showUI(__html__, { width: 420, height: 600 });
+  figma.showUI(__html__, { width: 420, height: 640 });
   var snapshot = null;
   var snapshotLibrary = null;
   var buildPage = (msg) => {
@@ -426,7 +574,19 @@
           libraries: PROFILES.map((p) => ({ id: p.id, name: p.name })),
           defaultId: DEFAULT_PROFILE_ID,
           file: figma.root.name,
-          isSource: PROFILES.some((p) => p.sourceFile === figma.root.name)
+          isSource: PROFILES.some((p) => p.sourceFile === figma.root.name),
+          pageTypes: PAGE_TYPES.map((t) => ({ id: t.id, label: t.label }))
+        });
+      }
+      if (msg.type === "sections") {
+        let list = msg.op === "reset" ? recommended(msg.pageType) : msg.sections;
+        if (msg.op === "add") list = addSection(msg.pageType, list, msg.pattern);
+        if (msg.op === "remove") list = removeSection(list, msg.pattern);
+        if (msg.op === "move") list = moveSection(list, msg.pattern, msg.dir);
+        figma.ui.postMessage({
+          type: "sections",
+          sections: list.map((x) => __spreadProps(__spreadValues({}, x), { label: getPattern(x.pattern).label })),
+          addable: addable(msg.pageType, list).map((id) => ({ id, label: getPattern(id).label }))
         });
       }
       if (msg.type === "capture") {
@@ -452,7 +612,14 @@
             "This is a library file. Open your design file (or duplicate or branch this one in Figma) and run the plugin there."
           );
         }
-        const page = buildPage(msg);
+        let page;
+        if (msg.preset) {
+          page = buildPage({ template: msg.preset, seed: msg.seed });
+        } else {
+          validateGenerate(msg.pageType, msg.brief, msg.sections);
+          const snap = snapshot;
+          page = buildFromSections(msg.pageType, msg.brief, msg.sections, (key) => key in snap.components);
+        }
         const figmaPage = await pageIRToFigma(page, snapshot);
         const html = pageToHtml(page, snapshot.tokens);
         figma.notify(`Created page "${figmaPage.name}"`);

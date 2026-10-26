@@ -5,57 +5,141 @@
 <style>
   body { font-family: sans-serif; font-size: 13px; margin: 16px; color: #1a1a1a; }
   label { display: block; margin-top: 10px; font-weight: 600; }
-  input, textarea { width: 100%; box-sizing: border-box; margin-top: 4px; padding: 6px; font: inherit; }
+  input, textarea, select { width: 100%; box-sizing: border-box; margin-top: 4px; padding: 6px; font: inherit; }
   button { margin-top: 14px; padding: 8px 12px; font: inherit; cursor: pointer; }
+  button.small { margin: 0 0 0 4px; padding: 2px 6px; }
+  #nav { display: flex; gap: 8px; }
+  #steps { color: #555; margin-bottom: 8px; }
+  .step { display: none; }
+  .step.on { display: block; }
+  ol { padding-left: 20px; }
+  li { margin: 6px 0; }
+  .req { color: #888; font-size: 11px; }
   #status { margin-top: 10px; color: #555; }
-  #preview { margin-top: 12px; border: 1px solid #ddd; width: 100%; height: 260px; }
+  #preview { margin-top: 12px; border: 1px solid #ddd; width: 100%; height: 220px; }
 </style>
 </head>
 <body>
-  <label>Library
-    <select id="library"></select>
-  </label>
-  <button id="sync">Sync library</button>
-  <button id="capture" hidden>Capture keys (library file)</button>
-  <textarea id="captured" rows="6" hidden readonly></textarea>
-  <label>Template
-    <select id="template">
-      <option value="enguide">EnGuide Pharmacy (6 sections)</option>
-      <option value="A">Template A (hero + overview cards + CTA)</option>
-    </select>
-  </label>
-  <label>Headline <input id="headline" value="Care that fits your life"></label>
-  <label>Body <textarea id="body" rows="2">Find providers, plan visits, and manage your benefits in one place.</textarea></label>
-  <label>CTA <input id="cta" value="Find a provider"></label>
-  <button id="generate" disabled>Generate page</button>
+  <div id="steps"></div>
+
+  <section class="step" id="s0">
+    <label>Choose a design library
+      <select id="library"></select>
+    </label>
+    <button id="sync">Sync library</button>
+    <button id="capture" hidden>Capture keys (library file)</button>
+    <textarea id="captured" rows="6" hidden readonly></textarea>
+  </section>
+
+  <section class="step" id="s1">
+    <label>Page type <select id="pageType"></select></label>
+    <label>Audience (required) <input id="audience"></label>
+    <label>Page goal <input id="goal"></label>
+    <label>Primary action <input id="action"></label>
+    <label>Paste a full brief (optional) <textarea id="pasted" rows="4"></textarea></label>
+  </section>
+
+  <section class="step" id="s2">
+    <ol id="sections"></ol>
+    <label>Add section <select id="addable"></select></label>
+    <button id="add">Add</button>
+  </section>
+
+  <section class="step" id="s3">
+    <div id="summary"></div>
+    <button id="generate">Generate page</button>
+    <details><summary>Advanced: start from a preset</summary>
+      <select id="preset"><option value="enguide">EnGuide Pharmacy (6 sections)</option><option value="A">Starter (hero, cards, CTA)</option></select>
+      <button id="genPreset">Generate preset</button>
+    </details>
+    <iframe id="preview" sandbox=""></iframe>
+  </section>
+
+  <div id="nav"><button id="back">Back</button><button id="next">Next</button></div>
   <div id="status"></div>
-  <iframe id="preview" sandbox=""></iframe>
 <script>
-  const status = document.getElementById("status");
-  const generate = document.getElementById("generate");
+  const $ = (id) => document.getElementById(id);
   const post = (m) => parent.postMessage({ pluginMessage: m }, "*");
-  const library = document.getElementById("library");
-  const capture = document.getElementById("capture");
-  const captured = document.getElementById("captured");
-  document.getElementById("sync").onclick = () => post({ type: "sync", libraryId: library.value });
-  capture.onclick = () => post({ type: "capture", libraryId: library.value });
-  post({ type: "init" });
-  generate.onclick = () => parent.postMessage({ pluginMessage: { type: "generate", template: template.value, seed: {
-    headline: headline.value, body: body.value, cta: cta.value } } }, "*");
+  const NAMES = ["Library", "Brief", "Sections", "Generate"];
+  // One state object so going back and forward keeps entries.
+  const state = { step: 0, synced: false, sections: [], sectionsFor: null, libraries: [], pageTypes: [] };
+
+  const brief = () => ({ audience: $("audience").value, goal: $("goal").value, action: $("action").value, pasted: $("pasted").value });
+  const listMsg = (extra) => post({ type: "sections", pageType: $("pageType").value, sections: state.sections, ...extra });
+
+  function canAdvance() {
+    if (state.step === 0) return state.synced;
+    if (state.step === 1) return $("audience").value.trim() !== "";
+    if (state.step === 2) return state.sections.length > 0;
+    return false;
+  }
+  function render() {
+    $("steps").textContent = NAMES.map((n, i) => (i === state.step ? `[${n}]` : n)).join("  >  ");
+    document.querySelectorAll(".step").forEach((el, i) => el.classList.toggle("on", i === state.step));
+    $("back").disabled = state.step === 0;
+    $("next").hidden = state.step === 3;
+    $("next").disabled = !canAdvance();
+    if (state.step === 3) {
+      const b = brief();
+      $("summary").innerHTML = `<p><b>Library:</b> ${$("library").selectedOptions[0]?.text || ""}<br><b>Page type:</b> ${$("pageType").selectedOptions[0]?.text}<br><b>Audience:</b> ${b.audience || "—"}<br><b>Goal:</b> ${b.goal || "—"}<br><b>Primary action:</b> ${b.action || "—"}</p><ol>` +
+        state.sections.map((s) => `<li>${s.label}</li>`).join("") + "</ol>";
+    }
+  }
+  function renderSections() {
+    $("sections").innerHTML = state.sections.map((s) =>
+      `<li>${s.label} ${s.required ? '<span class="req">required</span>' : `<button class="small" data-op="remove" data-p="${s.pattern}">Remove</button>`}
+       <button class="small" data-op="move" data-dir="-1" data-p="${s.pattern}">Up</button>
+       <button class="small" data-op="move" data-dir="1" data-p="${s.pattern}">Down</button></li>`).join("");
+    $("add").disabled = $("addable").options.length === 0;
+  }
+
+  $("sync").onclick = () => post({ type: "sync", libraryId: $("library").value });
+  $("capture").onclick = () => post({ type: "capture", libraryId: $("library").value });
+  $("library").onchange = () => { state.synced = false; render(); };
+  $("audience").oninput = render;
+  $("pageType").onchange = () => { state.sectionsFor = null; };
+  $("back").onclick = () => { state.step--; render(); };
+  $("next").onclick = () => {
+    state.step++;
+    if (state.step === 2 && state.sectionsFor !== $("pageType").value) {
+      state.sectionsFor = $("pageType").value; // changing page type resets the section list
+      listMsg({ op: "reset" });
+    }
+    render();
+  };
+  $("sections").onclick = (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    listMsg({ op: b.dataset.op, pattern: b.dataset.p, dir: Number(b.dataset.dir) });
+  };
+  $("add").onclick = () => listMsg({ op: "add", pattern: $("addable").value });
+  $("generate").onclick = () => post({ type: "generate", pageType: $("pageType").value, brief: brief(),
+    sections: state.sections.map(({ pattern, required, variant }) => ({ pattern, required, variant })) });
+  $("genPreset").onclick = () => post({ type: "generate", preset: $("preset").value,
+    seed: { headline: "Care that fits your life", body: "Find providers, plan visits, and manage your benefits in one place.", cta: "Find a provider" } });
+
   onmessage = (e) => {
     const m = e.data.pluginMessage;
     if (!m) return;
     if (m.type === "libraries") {
-      library.innerHTML = m.libraries.map((l) => `<option value="${l.id}">${l.name}</option>`).join("");
-      library.value = m.defaultId;
-      capture.hidden = !m.isSource;
-      status.textContent = m.isSource ? `"${m.file}" is a library file. Capture keys here; generate in a design file.` : "";
+      $("library").innerHTML = m.libraries.map((l) => `<option value="${l.id}">${l.name}</option>`).join("");
+      $("library").value = m.defaultId;
+      $("pageType").innerHTML = m.pageTypes.map((t) => `<option value="${t.id}">${t.label}</option>`).join("");
+      $("capture").hidden = !m.isSource;
+      $("status").textContent = m.isSource ? `"${m.file}" is a library file. Capture keys here; generate in a design file.` : "";
+      render();
     }
-    if (m.type === "captured") { captured.value = m.json; captured.hidden = false; status.textContent = "Paste this over components in the library profile."; }
-    if (m.type === "synced") { status.textContent = `Library "${m.source}": ${m.components} components, ${m.tokens} tokens.`; generate.disabled = false; }
-    if (m.type === "generated") { preview.srcdoc = m.html; status.textContent = "Generated."; }
-    if (m.type === "error") status.textContent = m.message;
+    if (m.type === "captured") { $("captured").value = m.json; $("captured").hidden = false; $("status").textContent = "Paste this over components in the library profile."; }
+    if (m.type === "synced") { state.synced = true; $("status").textContent = `Library "${m.source}": ${m.components} components, ${m.tokens} tokens.`; render(); }
+    if (m.type === "sections") {
+      state.sections = m.sections;
+      $("addable").innerHTML = m.addable.map((a) => `<option value="${a.id}">${a.label}</option>`).join("");
+      renderSections(); render();
+    }
+    if (m.type === "generated") { $("preview").srcdoc = m.html; $("status").textContent = "Generated."; }
+    if (m.type === "error") $("status").textContent = m.message;
   };
+  post({ type: "init" });
+  render();
 </script>
 </body>
 </html>
