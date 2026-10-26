@@ -39,6 +39,7 @@ describe("resolveRef", () => {
 
 const profile = (key: string): LibraryProfile => ({
   id: "t",
+  mode: "keys",
   name: "Test Lib",
   sourceFile: "Test Lib Source",
   components: { card: { key, isSet: true, name: "Overview Card" } },
@@ -86,5 +87,12 @@ describe("isLibraryFile", () => {
     mockFigma([], {});
     (globalThis as any).figma.root.name = "My design";
     expect(await isLibraryFile(profile("k"), refs)).toBe(false);
+  });
+});
+
+describe("profile modes", () => {
+  it("defaults Leaf to local mode", async () => {
+    const { leaf } = await import("./profiles/leaf");
+    expect(leaf.mode).toBe("local");
   });
 });

@@ -84,6 +84,31 @@
       await harvest(child, seen, tokens, variableIds);
     }
   }
+  async function syncLibrary(refs) {
+    const tokens = {};
+    const variableIds = {};
+    const components = {};
+    const resolution = {};
+    const missing = [];
+    const seen = /* @__PURE__ */ new Set();
+    for (const [key, ref] of Object.entries(refs)) {
+      const found = await resolveRef(ref);
+      if (!found) {
+        missing.push(`${key} ("${ref.name}")`);
+        continue;
+      }
+      const { node, via } = found;
+      components[key] = { nodeId: node.id, isSet: node.type === "COMPONENT_SET" };
+      resolution[key] = via;
+      await harvestTree(node, seen, tokens, variableIds);
+    }
+    if (missing.length) {
+      throw new Error(
+        `Components not found in "${figma.root.name}": ${missing.join(", ")}. Open the Leaf test file or a library file with the same components.`
+      );
+    }
+    return { source: figma.root.name, components, tokens, variableIds, resolution };
+  }
   async function syncProfile(profile) {
     const tokens = {};
     const variableIds = {};
@@ -157,6 +182,7 @@
   // src/library/profiles/leaf.ts
   var leaf = {
     id: "leaf",
+    mode: "local",
     name: "Leaf Public Sites",
     sourceFile: "Leaf Public Sites Lib-test (Copy)",
     components: Object.fromEntries(
@@ -596,7 +622,7 @@
       }
       if (msg.type === "sync") {
         const profile = getProfile(msg.libraryId);
-        snapshot = await syncProfile(profile);
+        snapshot = profile.mode === "local" ? await syncLibrary(COMPONENT_REFS) : await syncProfile(profile);
         snapshotLibrary = profile.id;
         figma.ui.postMessage({
           type: "synced",
@@ -607,7 +633,8 @@
       }
       if (msg.type === "generate") {
         if (!snapshot || !snapshotLibrary) throw new Error("Sync the library first.");
-        if (await isLibraryFile(getProfile(snapshotLibrary), COMPONENT_REFS)) {
+        const active = getProfile(snapshotLibrary);
+        if (active.mode === "keys" && await isLibraryFile(active, COMPONENT_REFS)) {
           throw new Error(
             "This is a library file. Open your design file (or duplicate or branch this one in Figma) and run the plugin there."
           );

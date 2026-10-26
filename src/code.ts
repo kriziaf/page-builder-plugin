@@ -1,4 +1,4 @@
-import { captureProfile, isLibraryFile, syncProfile } from "./library/sync";
+import { captureProfile, isLibraryFile, syncLibrary, syncProfile } from "./library/sync";
 import { DEFAULT_PROFILE_ID, getProfile, PROFILES } from "./library/registry";
 import { COMPONENT_REFS } from "./library/refs";
 import { templateA } from "./templates/templateA";
@@ -12,8 +12,8 @@ import type { Section } from "./flow/sections";
 import { buildFromSections } from "./flow/build";
 import type { LibrarySnapshot, PageIR } from "./ir/types";
 
-// Runs in the user's design file. The library is a selectable source: its components are imported
-// by key (the library must be enabled in this file). The plugin never generates into a library file.
+// The library is a selectable source. "local" profiles (default: Leaf) read components from pages of the
+// open file; "keys" profiles import by key into a design file and never generate inside a library file.
 
 figma.showUI(__html__, { width: 420, height: 640 });
 
@@ -59,7 +59,7 @@ figma.ui.onmessage = async (msg: { type: string; [k: string]: any }) => {
 
     if (msg.type === "sync") {
       const profile = getProfile(msg.libraryId);
-      snapshot = await syncProfile(profile);
+      snapshot = profile.mode === "local" ? await syncLibrary(COMPONENT_REFS) : await syncProfile(profile);
       snapshotLibrary = profile.id;
       figma.ui.postMessage({
         type: "synced",
@@ -71,7 +71,9 @@ figma.ui.onmessage = async (msg: { type: string; [k: string]: any }) => {
 
     if (msg.type === "generate") {
       if (!snapshot || !snapshotLibrary) throw new Error("Sync the library first.");
-      if (await isLibraryFile(getProfile(snapshotLibrary), COMPONENT_REFS)) {
+      const active = getProfile(snapshotLibrary);
+      // Local mode works inside the library file itself (it only adds a new timestamped page).
+      if (active.mode === "keys" && (await isLibraryFile(active, COMPONENT_REFS))) {
         throw new Error(
           "This is a library file. Open your design file (or duplicate or branch this one in Figma) and run the plugin there.",
         );

@@ -76,7 +76,7 @@ Private
 
 ## Sources and targets
 
-The library is a source; the plugin writes only into the design file you have open.
+Each library profile has a mode. `local` (default, Leaf): run the plugin in the Leaf test file; components are read from its pages and pages are generated there. `keys`: components are imported from a library enabled in your design file, and generate refuses to run inside a library file.
 
 1. Enable the library in your design file (Assets > Libraries).
 2. Open the plugin, pick the library, click **Sync library**, then **Generate page**.

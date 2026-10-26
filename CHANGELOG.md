@@ -3,6 +3,11 @@
 Older versions stay reachable as git tags: `git fetch --tags && git checkout <tag>`.
 `dist/` is committed, so every tag can be loaded in Figma without a build.
 
+## Unreleased
+Leaf profile is `local` mode again: components come from pages of the open file (reference node ID, then
+name) instead of import by key. `keys` mode and the library-file guard stay for libraries enabled in a
+design file. Guided flow added (`specs/001-guided-flow`).
+
 ## v0.3.0
 Library is a selectable source (profiles, import by key, capture mode). Generate runs only in the
 open design file and refuses to run inside a library file. Generated pages get a time stamp.
