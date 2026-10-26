@@ -99,3 +99,7 @@ without keys and needs one capture run.
 | `v0.3.0` | Library as source; generates only in a design file |
 
 `git fetch --tags && git checkout v0.1.0`. See `CHANGELOG.md`.
+
+## Specs
+
+Feature specs live in `specs/`. Current: [`specs/001-guided-flow`](specs/001-guided-flow/spec.md).
