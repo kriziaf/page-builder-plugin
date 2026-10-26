@@ -133,7 +133,8 @@ export async function nodeToFigma(node: IRNode, snap: LibrarySnapshot, parent: F
 
 export async function pageIRToFigma(page: PageIR, snap: LibrarySnapshot): Promise<PageNode> {
   const figmaPage = figma.createPage();
-  figmaPage.name = page.name;
+  // Time-stamped so repeated runs never collide with, or overwrite, earlier generated pages.
+  figmaPage.name = `${page.name} (${new Date().toISOString().slice(0, 16).replace("T", " ")})`;
   await figma.setCurrentPageAsync(figmaPage);
   const root = await nodeToFigma(page.root, snap, figmaPage);
   if ("resize" in root) root.resize(page.width, root.height);

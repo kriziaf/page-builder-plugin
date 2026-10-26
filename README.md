@@ -88,3 +88,13 @@ Library profiles live in `src/library/profiles/`. Component keys differ per libr
 library: open the library file, pick it in the dropdown, click **Capture keys**, and paste the output
 as `components` in a new profile (register it in `src/library/registry.ts`). The Leaf profile ships
 without keys and needs one capture run.
+
+## Older versions
+
+| Tag | Behavior |
+| --- | --- |
+| `v0.1.0` | Leaf test file only; writes pages into that file (simple tests) |
+| `v0.2.0` | Runs in any file with the same components (name fallback) |
+| `v0.3.0` | Library as source; generates only in a design file |
+
+`git fetch --tags && git checkout v0.1.0`. See `CHANGELOG.md`.

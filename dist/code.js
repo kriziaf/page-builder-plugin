@@ -357,7 +357,7 @@
   }
   async function pageIRToFigma(page, snap) {
     const figmaPage = figma.createPage();
-    figmaPage.name = page.name;
+    figmaPage.name = `${page.name} (${(/* @__PURE__ */ new Date()).toISOString().slice(0, 16).replace("T", " ")})`;
     await figma.setCurrentPageAsync(figmaPage);
     const root = await nodeToFigma(page.root, snap, figmaPage);
     if ("resize" in root) root.resize(page.width, root.height);
